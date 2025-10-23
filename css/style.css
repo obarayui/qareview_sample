@@ -483,3 +483,42 @@ footer {
         font-size: 1rem;
     }
 }
+
+/* ===== Data Management Section ===== */
+.data-management {
+    margin-top: 40px;
+    padding-top: 40px;
+    border-top: 2px solid #e0e0e0;
+}
+
+.data-management h2 {
+    color: #667eea;
+    margin-bottom: 20px;
+    font-size: 1.8rem;
+}
+
+.data-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.data-actions button {
+    flex: 1;
+    min-width: 150px;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+}
