@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>レビューツール - ホーム</title>
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- AWS SDK for JavaScript (S3アップロード用) -->
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1563.0.min.js"></script>
+
+    <!-- AWS設定ファイル (オプション: config.jsがある場合のみ読み込まれます) -->
+    <script src="config.js" onerror="console.log('config.js not found. S3 upload disabled.')"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>レビューツールアプリケーション</h1>
+            <p class="subtitle">画像を見ながら4選択肢の問題に回答</p>
+        </header>
+
+        <main>
+            <section class="problem-set-selection">
+                <h2>問題セットを選択してください</h2>
+
+                <div class="form-group">
+                    <label for="reviewerName">レビューア名:</label>
+                    <input type="text" id="reviewerName" placeholder="あなたの名前を入力">
+                </div>
+
+                <div class="problem-sets">
+                    <div class="problem-set-card" data-set="tooltest001">
+                        <h3>問題セット 1</h3>
+                        <p>tooltest001</p>
+                        <button class="btn-primary" onclick="startReview('tooltest001')">この問題セットを開始</button>
+                    </div>
+
+                    <div class="problem-set-card" data-set="tooltest002">
+                        <h3>問題セット 2</h3>
+                        <p>tooltest002</p>
+                        <button class="btn-primary" onclick="startReview('tooltest002')">この問題セットを開始</button>
+                    </div>
+                </div>
+
+                <div class="custom-url-section">
+                    <h3>カスタムURL（オプション）</h3>
+                    <div class="form-group">
+                        <label for="customUrl">GitHubリポジトリのURL:</label>
+                        <input type="text" id="customUrl" placeholder="https://github.com/username/repo/tree/main/folder">
+                    </div>
+                    <button class="btn-secondary" onclick="startReviewCustom()">カスタムURLで開始</button>
+                </div>
+            </section>
+
+            <section class="error-message" id="errorMessage" style="display: none;">
+                <p></p>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 レビューツールアプリケーション</p>
+        </footer>
+    </div>
+
+    <script src="js/app.js"></script>
+    <script>
+        function startReview(problemSet) {
+            // レビューア名の検証
+            const reviewerName = document.getElementById('reviewerName').value.trim();
+
+            if (!reviewerName) {
+                showError('レビューア名を入力してください');
+                return;
+            }
+
+            // レビューア名をlocalStorageに保存
+            localStorage.setItem('reviewerName', reviewerName);
+            localStorage.setItem('currentProblemSet', problemSet);
+
+            // レビュー画面に遷移
+            window.location.href = `review.html?set=${problemSet}`;
+        }
+
+        function startReviewCustom() {
+            const customUrl = document.getElementById('customUrl').value.trim();
+            const reviewerName = document.getElementById('reviewerName').value.trim();
+
+            if (!customUrl) {
+                showError('カスタムURLを入力してください');
+                return;
+            }
+
+            if (!reviewerName) {
+                showError('レビューア名を入力してください');
+                return;
+            }
+
+            // レビューア名をlocalStorageに保存
+            localStorage.setItem('reviewerName', reviewerName);
+            localStorage.setItem('customUrl', customUrl);
+
+            // レビュー画面に遷移
+            window.location.href = `review.html?custom=${encodeURIComponent(customUrl)}`;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.querySelector('p').textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>レビューツール - レビュー</title>
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- AWS SDK for JavaScript (S3アップロード用) -->
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1563.0.min.js"></script>
+
+    <!-- AWS設定ファイル (オプション: config.jsがある場合のみ読み込まれます) -->
+    <script src="config.js" onerror="console.log('config.js not found. S3 upload disabled.')"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>レビュー画面</h1>
+            <div class="progress-info">
+                <span id="progressText">問題 <span id="currentQuestion">0</span> / <span id="totalQuestions">0</span></span>
+                <span id="problemSetName"></span>
+                <span id="reviewerInfo">レビューア: <span id="reviewerName"></span></span>
+            </div>
+        </header>
+
+        <main>
+            <div id="loadingScreen" class="loading-screen">
+                <div class="spinner"></div>
+                <p>問題を読み込み中...</p>
+            </div>
+
+            <div id="reviewContent" style="display: none;">
+                <!-- 画像表示エリア -->
+                <section class="image-section">
+                    <h2>問題画像</h2>
+                    <div class="image-container">
+                        <img id="questionImage" src="" alt="問題画像" />
+                    </div>
+                </section>
+
+                <!-- 問題表示エリア -->
+                <section class="question-section">
+                    <div class="question-info">
+                        <span class="question-tag" id="questionTag"></span>
+                    </div>
+                    <h2 id="questionText"></h2>
+                </section>
+
+                <!-- 回答エリア -->
+                <section class="answers-section">
+                    <h3>あなたの回答</h3>
+                    <div class="choices">
+                        <button class="choice-btn" data-choice="0"></button>
+                        <button class="choice-btn" data-choice="1"></button>
+                        <button class="choice-btn" data-choice="2"></button>
+                        <button class="choice-btn" data-choice="3"></button>
+                    </div>
+                    <div class="comment-area" style="display: none;">
+                        <label for="comment">コメント (オプション):</label>
+                        <textarea id="comment" rows="3" placeholder="コメントを入力..."></textarea>
+                    </div>
+                </section>
+
+                <!-- 結果表示エリア -->
+                <section class="result-section" id="resultSection" style="display: none;">
+                    <h3>結果</h3>
+                    <div id="resultContent"></div>
+                    <div class="correct-answer">
+                        <strong>正解:</strong> <span id="correctAnswerText"></span>
+                    </div>
+                </section>
+
+                <!-- アクションボタン -->
+                <section class="action-section">
+                    <button id="submitBtn" class="btn-primary btn-large" onclick="submitAnswers()">回答を提出</button>
+                    <button id="nextBtn" class="btn-secondary btn-large" style="display: none;" onclick="nextQuestion()">次の問題へ</button>
+                    <button id="finishBtn" class="btn-success btn-large" style="display: none;" onclick="finishReview()">レビュー完了</button>
+                    <button class="btn-secondary" onclick="backToHome()">ホームに戻る</button>
+                </section>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 レビューツールアプリケーション</p>
+        </footer>
+    </div>
+
+    <script src="js/github.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
