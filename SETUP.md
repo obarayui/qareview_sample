@@ -347,24 +347,127 @@ StorageManager.clearAll()
 
 5. **変更を保存**
 
-### ステップ3: IAMユーザーの作成と認証情報の取得
+### ステップ3: Lambda関数の作成
 
-1. **IAMサービスを開く**
-   - AWSコンソールの検索バーで「IAM」と入力
+バックエンドでS3へのアップロードを処理するLambda関数を作成します。
 
-2. **新しいユーザーを作成**
-   - 左サイドバーの「ユーザー」をクリック
-   - 「ユーザーを作成」ボタンをクリック
-   - **ユーザー名**: 例 `qareview-app-user`
-   - 「次へ」をクリック
+1. **Lambdaサービスを開く**
+   - AWSコンソールの検索バーで「Lambda」と入力
+   - 「Lambda」をクリック
 
-3. **アクセス許可を設定**
-   - 「ポリシーを直接アタッチ」を選択
+2. **関数を作成**
+   - 「関数の作成」ボタンをクリック
+   - **一から作成**を選択
+   - **関数名**: `QAReviewUploadFunction`
+   - **ランタイム**: `Node.js 20.x`（または最新版）
+   - **アーキテクチャ**: `x86_64`
+   - 「関数の作成」をクリック
+
+3. **Lambda関数のコードを追加**
+   - コードエディタに以下をコピー&ペースト:
+
+   ```javascript
+   const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+
+   const s3Client = new S3Client({ region: process.env.AWS_REGION });
+
+   exports.handler = async (event) => {
+       console.log('受信したイベント:', JSON.stringify(event, null, 2));
+
+       try {
+           // CORSプリフライトリクエストの処理
+           if (event.httpMethod === 'OPTIONS') {
+               return {
+                   statusCode: 200,
+                   headers: {
+                       'Access-Control-Allow-Origin': '*',
+                       'Access-Control-Allow-Headers': 'Content-Type',
+                       'Access-Control-Allow-Methods': 'POST, OPTIONS'
+                   },
+                   body: ''
+               };
+           }
+
+           // リクエストボディを解析
+           const body = JSON.parse(event.body);
+           const reviewData = body.reviewData;
+
+           if (!reviewData) {
+               return {
+                   statusCode: 400,
+                   headers: {
+                       'Access-Control-Allow-Origin': '*',
+                       'Content-Type': 'application/json'
+                   },
+                   body: JSON.stringify({ error: 'reviewData is required' })
+               };
+           }
+
+           // S3バケット名（環境変数から取得）
+           const bucketName = process.env.S3_BUCKET_NAME;
+
+           // ファイル名を生成
+           const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+           const fileName = `results/review_${reviewData.review_id}_${timestamp}.json`;
+
+           // S3にアップロード
+           const command = new PutObjectCommand({
+               Bucket: bucketName,
+               Key: fileName,
+               Body: JSON.stringify(reviewData, null, 2),
+               ContentType: 'application/json',
+               ServerSideEncryption: 'AES256'
+           });
+
+           await s3Client.send(command);
+
+           return {
+               statusCode: 200,
+               headers: {
+                   'Access-Control-Allow-Origin': '*',
+                   'Content-Type': 'application/json'
+               },
+               body: JSON.stringify({
+                   message: 'アップロード成功',
+                   fileName: fileName
+               })
+           };
+
+       } catch (error) {
+           console.error('エラー:', error);
+           return {
+               statusCode: 500,
+               headers: {
+                   'Access-Control-Allow-Origin': '*',
+                   'Content-Type': 'application/json'
+               },
+               body: JSON.stringify({
+                   error: 'アップロードに失敗しました',
+                   details: error.message
+               })
+           };
+       }
+   };
+   ```
+
+   - 「Deploy」ボタンをクリック
+
+4. **環境変数を設定**
+   - 「設定」タブをクリック
+   - 左サイドバーの「環境変数」をクリック
+   - 「編集」をクリック
+   - 「環境変数を追加」をクリック
+   - **キー**: `S3_BUCKET_NAME`
+   - **値**: `qareview-results-yourname`（実際のバケット名）
+   - 「保存」をクリック
+
+5. **実行ロールにS3アクセス権限を追加**
+   - 「設定」タブの「アクセス権限」をクリック
+   - 「実行ロール」の下にあるロール名をクリック（新しいタブでIAMが開きます）
+   - 「許可を追加」→「ポリシーをアタッチ」をクリック
    - 「ポリシーの作成」をクリック
-
-4. **カスタムポリシーを作成**
    - 「JSON」タブをクリック
-   - 以下のポリシーを貼り付け（バケット名を実際の名前に置き換える）:
+   - 以下を貼り付け（バケット名を実際の名前に置き換える）:
 
    ```json
    {
@@ -374,8 +477,7 @@ StorageManager.clearAll()
                "Effect": "Allow",
                "Action": [
                    "s3:PutObject",
-                   "s3:PutObjectAcl",
-                   "s3:GetObject"
+                   "s3:PutObjectAcl"
                ],
                "Resource": "arn:aws:s3:::qareview-results-yourname/*"
            }
@@ -384,62 +486,135 @@ StorageManager.clearAll()
    ```
 
    - 「次へ」をクリック
-   - **ポリシー名**: 例 `QAReviewS3WritePolicy`
+   - **ポリシー名**: `QAReviewS3WritePolicy`
    - 「ポリシーの作成」をクリック
+   - ロールの画面に戻り、作成した`QAReviewS3WritePolicy`を検索して選択
+   - 「許可を追加」をクリック
 
-5. **ユーザーにポリシーをアタッチ**
-   - ユーザー作成画面に戻る
-   - 作成したポリシー `QAReviewS3WritePolicy` を検索して選択
-   - 「次へ」→「ユーザーの作成」をクリック
+6. **タイムアウトを延長（オプション）**
+   - Lambda関数の画面に戻る
+   - 「設定」タブ→「一般設定」→「編集」
+   - **タイムアウト**: `30秒`に変更
+   - 「保存」をクリック
 
-6. **アクセスキーを作成**
-   - 作成したユーザーをクリック
-   - 「セキュリティ認証情報」タブを開く
-   - 「アクセスキーを作成」をクリック
-   - **ユースケース**: 「ローカルコード」を選択
-   - 「次へ」→「アクセスキーを作成」をクリック
+### ステップ4: API Gatewayの作成
 
-7. **認証情報を保存**
-   - **アクセスキーID**: `AKIA...` のような文字列
-   - **シークレットアクセスキー**: `...` のような文字列
-   - **重要**: この画面を閉じると二度と表示されないので、必ず保存してください
+Lambda関数をHTTPエンドポイントとして公開します。
 
-### ステップ4: アプリケーションの設定
+1. **API Gatewayサービスを開く**
+   - AWSコンソールの検索バーで「API Gateway」と入力
+   - 「API Gateway」をクリック
+
+2. **REST APIを作成**
+   - 「APIを作成」ボタンをクリック
+   - **REST API**（プライベートではない）の「構築」をクリック
+   - **新しいAPI**を選択
+   - **API名**: `QAReviewAPI`
+   - **エンドポイントタイプ**: `リージョン`
+   - 「APIの作成」をクリック
+
+3. **リソースを作成**
+   - 「アクション」→「リソースの作成」をクリック
+   - **リソース名**: `upload`
+   - **リソースパス**: `upload`
+   - 「CORSを有効にする」にチェック
+   - 「リソースの作成」をクリック
+
+4. **POSTメソッドを作成**
+   - `/upload`リソースを選択
+   - 「アクション」→「メソッドの作成」をクリック
+   - プルダウンから`POST`を選択→チェックマークをクリック
+   - **統合タイプ**: `Lambda関数`
+   - **Lambdaリージョン**: 関数を作成したリージョン（例: `ap-northeast-1`）
+   - **Lambda関数**: `QAReviewUploadFunction`
+   - 「保存」をクリック
+   - 権限の追加確認が表示されたら「OK」をクリック
+
+5. **CORSを有効化**
+
+   CORSは、ブラウザから異なるドメインのAPIを呼び出すために必要な設定です。
+
+   **手順**:
+   - 左側のリソースツリーで `/upload` を選択（青く選択された状態にする）
+   - 上部の「アクション」ボタンをクリック
+   - ドロップダウンから「CORSの有効化」を選択
+   - ポップアップが表示されたら、デフォルト設定のまま「CORSを有効にして既存のCORSヘッダーを置換」ボタンをクリック
+   - 確認ダイアログで「はい、既存の値を置き換えます」をクリック
+
+   **完了の確認**: `/upload`の下に`OPTIONS`メソッドが自動的に追加されます
+
+6. **APIをデプロイ**
+   - 「アクション」→「APIのデプロイ」をクリック
+   - **デプロイされるステージ**: `[新しいステージ]`
+   - **ステージ名**: `prod`
+   - 「デプロイ」をクリック
+
+7. **APIエンドポイントURLを取得**
+   - デプロイ後、画面上部に**URLを呼び出す**が表示されます
+   - このURLをコピー（例: `https://abcd1234.execute-api.ap-northeast-1.amazonaws.com/prod`）
+   - **重要**: このURLは後で使用します
+
+### ステップ5: アプリケーションの設定
 
 1. **設定ファイルを作成**
 
-   プロジェクトのルートに `config.js` ファイルを作成:
+   プロジェクトのルートに `config.js` ファイルを作成します。`config.example.js`をコピーして編集するのが簡単です:
 
-   ```javascript
-   // AWS S3設定
-   const AWS_CONFIG = {
-       enabled: true,  // S3保存を有効化
-       region: 'ap-northeast-1',  // あなたのリージョン
-       bucketName: 'qareview-results-yourname',  // あなたのバケット名
-       accessKeyId: 'AKIA...',  // ステップ3で取得したアクセスキーID
-       secretAccessKey: '...',  // ステップ3で取得したシークレットアクセスキー
-       folderPrefix: 'results/'  // バケット内のフォルダ（オプション）
-   };
+   ```bash
+   cp config.example.js config.js
    ```
 
-   **セキュリティ警告**:
-   - この方法は認証情報がクライアント側に露出するため、テスト環境のみで使用してください
-   - 本番環境では、AWS Cognito や API Gateway + Lambda を使用することを強く推奨します
+   `config.js`を編集:
 
-2. **index.htmlとreview.htmlに設定を読み込む**
+   ```javascript
+   // AWS API Gateway設定
+   const AWS_CONFIG = {
+       // S3保存を有効化
+       enabled: true,
 
-   `<head>`セクションに以下を追加:
+       // ステップ4で取得したAPI GatewayのエンドポイントURL
+       // 例: https://abcd1234.execute-api.ap-northeast-1.amazonaws.com/prod/upload
+       apiEndpoint: 'https://YOUR_API_ID.execute-api.YOUR_REGION.amazonaws.com/prod/upload'
+   };
 
-   ```html
-   <script src="config.js"></script>
+   // 設定をグローバルに公開
+   window.AWS_CONFIG = AWS_CONFIG;
+   ```
+
+   **重要**: `apiEndpoint`をステップ4で取得した実際のURLに置き換えてください。URLの末尾に`/upload`を忘れずに追加してください。
+
+2. **config.jsをGitから除外**
+
+   セキュリティのため、`config.js`をGitにコミットしないようにします:
+
+   ```bash
+   # .gitignoreに追加されていることを確認
+   cat .gitignore
+   ```
+
+   `.gitignore`に`config.js`が含まれていない場合は追加:
+
+   ```
+   config.js
    ```
 
 3. **動作確認**
-   - アプリケーションを起動
+   - アプリケーションをブラウザで開く
    - レビューを実行して完了
-   - S3バケットに結果ファイルが保存されていることを確認
+   - ブラウザのコンソールで確認:
+     ```javascript
+     console.log(window.AWS_CONFIG);
+     ```
+   - S3バケットの`results/`フォルダに結果ファイルが保存されていることを確認
 
-### ステップ5: セキュリティのベストプラクティス
+4. **他のチームメンバーへの共有**
+
+   他のメンバーも使用できるようにするには:
+   - `config.example.js`をコピーして`config.js`を作成
+   - 同じAPI Gateway URLを設定
+   - IAMユーザーを個別に作成する必要はありません
+
+### ステップ6: セキュリティのベストプラクティス
 
 1. **認証情報の保護**
    - `config.js`を`.gitignore`に追加してGitにコミットしない
@@ -453,6 +628,47 @@ StorageManager.clearAll()
 3. **バケットポリシーの最適化**
    - 必要最小限のアクセス権限のみを付与
    - IP制限やVPC制限を検討
+
+### CORSとは？（補足説明）
+
+**CORS (Cross-Origin Resource Sharing)** は、ブラウザのセキュリティ機能です。
+
+#### なぜCORSが必要？
+
+ブラウザには「同一オリジンポリシー」というセキュリティ制限があります：
+
+- **OK**: 同じドメイン内での通信
+  - 例: `https://example.com` から `https://example.com/api` へ
+
+- **NG（デフォルトでブロック）**: 異なるドメイン間での通信
+  - 例: `https://yourusername.github.io` から `https://abcd1234.execute-api.amazonaws.com` へ
+
+このアプリケーションでは：
+- **フロントエンド**: GitHub Pages（例: `https://yourusername.github.io`）
+- **バックエンドAPI**: API Gateway（例: `https://abcd1234.execute-api.amazonaws.com`）
+
+この2つは**異なるドメイン**なので、CORSを有効化しないとブラウザがAPIコールをブロックします。
+
+#### CORS設定で何が起こる？
+
+API GatewayでCORSを有効化すると、以下のHTTPヘッダーが自動的に返されます：
+
+```
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Methods: POST, OPTIONS
+Access-Control-Allow-Headers: Content-Type
+```
+
+これにより、ブラウザが「このAPIは他のドメインからの呼び出しを許可している」と認識し、通信を許可します。
+
+#### もしCORSを設定しないと？
+
+ブラウザのコンソールに以下のようなエラーが表示されます：
+
+```
+Access to fetch at 'https://...' from origin 'https://...' has been blocked by CORS policy:
+No 'Access-Control-Allow-Origin' header is present on the requested resource.
+```
 
 ### トラブルシューティング
 

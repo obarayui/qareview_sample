@@ -253,7 +253,7 @@ const StorageManager = {
     },
 
     /**
-     * S3へのアップロード
+     * S3へのアップロード（API Gateway経由）
      * @param {Object} result - レビュー結果
      * @returns {Promise<boolean>} - 成功したかどうか
      */
@@ -264,42 +264,32 @@ const StorageManager = {
             return false;
         }
 
-        // AWS SDKの確認
-        if (typeof AWS === 'undefined') {
-            console.error('AWS SDK が読み込まれていません');
-            alert('AWS SDK が読み込まれていません。HTMLファイルにAWS SDKを追加してください。');
+        // API エンドポイントの確認
+        if (!window.AWS_CONFIG.apiEndpoint) {
+            console.error('API エンドポイントが設定されていません');
+            alert('API エンドポイントが設定されていません。config.jsを確認してください。');
             return false;
         }
 
         try {
-            // AWS設定
-            AWS.config.update({
-                region: window.AWS_CONFIG.region,
-                credentials: new AWS.Credentials({
-                    accessKeyId: window.AWS_CONFIG.accessKeyId,
-                    secretAccessKey: window.AWS_CONFIG.secretAccessKey
+            // API Gateway にPOSTリクエストを送信
+            const response = await fetch(window.AWS_CONFIG.apiEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    reviewData: result
                 })
             });
 
-            // S3クライアントを作成
-            const s3 = new AWS.S3();
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+            }
 
-            // ファイル名を生成
-            const timestamp = this.getCurrentTimestamp();
-            const fileName = `${window.AWS_CONFIG.folderPrefix}review_${result.review_id}_${timestamp}.json`;
-
-            // S3にアップロード
-            const params = {
-                Bucket: window.AWS_CONFIG.bucketName,
-                Key: fileName,
-                Body: JSON.stringify(result, null, 2),
-                ContentType: 'application/json',
-                ServerSideEncryption: 'AES256'
-            };
-
-            await s3.putObject(params).promise();
-
-            console.log(`S3にアップロード成功: ${fileName}`);
+            const responseData = await response.json();
+            console.log(`S3にアップロード成功:`, responseData);
             return true;
 
         } catch (error) {
@@ -310,12 +300,17 @@ const StorageManager = {
     },
 
     /**
-     * すべての結果をS3にバッチアップロード
+     * すべての結果をS3にバッチアップロード（API Gateway経由）
      * @returns {Promise<boolean>} - 成功したかどうか
      */
     async uploadAllToS3() {
         if (!window.AWS_CONFIG || !window.AWS_CONFIG.enabled) {
             alert('S3アップロードが有効化されていません。config.jsを確認してください。');
+            return false;
+        }
+
+        if (!window.AWS_CONFIG.apiEndpoint) {
+            alert('API エンドポイントが設定されていません。config.jsを確認してください。');
             return false;
         }
 
@@ -327,33 +322,42 @@ const StorageManager = {
         }
 
         try {
-            const timestamp = this.getCurrentTimestamp();
-            const fileName = `${window.AWS_CONFIG.folderPrefix}all_results_${timestamp}.json`;
+            // 各結果を個別にアップロード（バッチ処理）
+            let successCount = 0;
+            let failCount = 0;
 
-            // AWS設定
-            AWS.config.update({
-                region: window.AWS_CONFIG.region,
-                credentials: new AWS.Credentials({
-                    accessKeyId: window.AWS_CONFIG.accessKeyId,
-                    secretAccessKey: window.AWS_CONFIG.secretAccessKey
-                })
-            });
+            for (const result of allResults) {
+                try {
+                    const response = await fetch(window.AWS_CONFIG.apiEndpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            reviewData: result
+                        })
+                    });
 
-            const s3 = new AWS.S3();
+                    if (response.ok) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                        console.error(`アップロード失敗 (${result.review_id}):`, await response.text());
+                    }
+                } catch (error) {
+                    failCount++;
+                    console.error(`アップロードエラー (${result.review_id}):`, error);
+                }
+            }
 
-            const params = {
-                Bucket: window.AWS_CONFIG.bucketName,
-                Key: fileName,
-                Body: JSON.stringify(allResults, null, 2),
-                ContentType: 'application/json',
-                ServerSideEncryption: 'AES256'
-            };
-
-            await s3.putObject(params).promise();
-
-            console.log(`全データをS3にアップロード成功: ${fileName}`);
-            alert(`${allResults.length}件のレビュー結果をS3にアップロードしました`);
-            return true;
+            if (failCount === 0) {
+                console.log(`全データをS3にアップロード成功: ${successCount}件`);
+                alert(`${successCount}件のレビュー結果をS3にアップロードしました`);
+                return true;
+            } else {
+                alert(`アップロード完了:\n成功: ${successCount}件\n失敗: ${failCount}件`);
+                return false;
+            }
 
         } catch (error) {
             console.error('S3バッチアップロードエラー:', error);

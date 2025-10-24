@@ -27,7 +27,7 @@
 - **データ保存**:
   - ブラウザのローカルストレージ（デフォルト）
   - AWS S3（オプション）
-- **AWS統合**: AWS SDK for JavaScript v2
+- **AWS統合**: Lambda + API Gateway（バックエンド）
 - **ホスティング**: GitHub Pages（推奨）
 
 ---
@@ -105,11 +105,26 @@ qareview_sample/
 
 ### AWS S3への保存（オプション）
 
-1. `config.example.js` をコピーして `config.js` を作成
-2. AWS認証情報を入力
-3. レビュー結果が自動的にS3にアップロードされます
+AWS Lambda + API Gatewayを使用したバックエンドを設定することで、レビュー結果をS3に保存できます。
+
+1. AWS Lambda関数を作成（SETUP.mdのステップ3参照）
+2. API Gatewayでエンドポイントを作成（SETUP.mdのステップ4参照）
+3. `config.example.js` をコピーして `config.js` を作成
+4. API GatewayのエンドポイントURLを設定
+
+```javascript
+const AWS_CONFIG = {
+    enabled: true,
+    apiEndpoint: 'https://YOUR_API_ID.execute-api.YOUR_REGION.amazonaws.com/prod/upload'
+};
+```
 
 詳細は [SETUP.md](./SETUP.md) の「AWS S3への保存設定」を参照してください。
+
+**メリット**:
+- 認証情報がクライアント側に露出しない
+- 複数人で同じAWSアカウントを共有可能
+- IAMユーザーを個別に作成する必要がない
 
 ### データのエクスポート
 
@@ -257,10 +272,10 @@ StorageManager.uploadAllToS3()
 - ⬜ ダークモード対応
 
 ### Phase 4: 拡張機能（一部完了）
-- ✅ AWS S3への自動保存
+- ✅ AWS S3への自動保存（Lambda + API Gateway）
 - ⬜ 履歴表示画面
 - ⬜ 問題セットの管理画面
-- ⬜ APIバックエンドの実装（Cognito + API Gateway + Lambda）
+- ⬜ Cognito認証の追加
 
 ---
 
