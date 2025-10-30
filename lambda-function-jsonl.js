@@ -1,6 +1,6 @@
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 
-const s3Client = new S3Client({ region: 'us-east-1' }); // リージョンをAPIエンドポイントに合わせて変更
+const s3Client = new S3Client({ region: 'ap-northeast-1' }); // S3バケットのリージョンに合わせる
 
 // 固定のJSONLファイル名
 const JSONL_FILE_NAME = 'qa_review_test.jsonl';
@@ -32,6 +32,7 @@ export const handler = async (event) => {
         if (expectedApiKey) {
             // ヘッダーからAPIキーを取得（大文字小文字を考慮）
             const headers = event.headers || {};
+            console.log('受信したヘッダー:', JSON.stringify(headers, null, 2));
             const apiKey = headers['X-API-Key'] || headers['x-api-key'];
 
             if (!apiKey) {
