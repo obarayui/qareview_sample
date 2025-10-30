@@ -273,11 +273,18 @@ const StorageManager = {
 
         try {
             // API Gateway にPOSTリクエストを送信
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+
+            // APIキーがあればヘッダーに追加
+            if (window.AWS_CONFIG.apiKey) {
+                headers['X-API-Key'] = window.AWS_CONFIG.apiKey;
+            }
+
             const response = await fetch(window.AWS_CONFIG.apiEndpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: headers,
                 body: JSON.stringify({
                     reviewData: result
                 })
@@ -285,7 +292,11 @@ const StorageManager = {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                console.error('サーバーエラーレスポンス:', errorData);
+                console.error('HTTPステータス:', response.status);
+                const errorMessage = errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+                const errorDetails = errorData.details ? `\n詳細: ${errorData.details}` : '';
+                throw new Error(errorMessage + errorDetails);
             }
 
             const responseData = await response.json();
@@ -328,11 +339,18 @@ const StorageManager = {
 
             for (const result of allResults) {
                 try {
+                    const headers = {
+                        'Content-Type': 'application/json'
+                    };
+
+                    // APIキーがあればヘッダーに追加
+                    if (window.AWS_CONFIG.apiKey) {
+                        headers['X-API-Key'] = window.AWS_CONFIG.apiKey;
+                    }
+
                     const response = await fetch(window.AWS_CONFIG.apiEndpoint, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: headers,
                         body: JSON.stringify({
                             reviewData: result
                         })
